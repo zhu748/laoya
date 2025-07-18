@@ -6,6 +6,16 @@ on:
     tags: ["v*"]
   pull_request:
     branches: ["master"]
+  workflow_dispatch:  # 新增手动触发入口
+    inputs:
+      environment:
+        description: '部署环境 (prod/staging)'
+        required: true
+        default: 'staging'
+      forceRebuild:
+        description: '强制重建镜像 (true/false)'
+        required: false
+        default: 'false'
 
 env:
   REGISTRY: ghcr.io
@@ -19,6 +29,14 @@ jobs:
       packages: write
 
     steps:
+      # 新增步骤：显示手动触发参数
+      - name: Show manual inputs
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "手动触发参数："
+          echo "环境: ${{ github.event.inputs.environment }}"
+          echo "强制重建: ${{ github.event.inputs.forceRebuild }}"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -46,6 +64,7 @@ jobs:
             type=sha,format=short
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
+      # 新增条件：支持手动强制重建
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -53,5 +72,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: ${{ github.event.inputs.forceRebuild == 'false' && 'type=gha' || '' }}
+          cache-to: ${{ github.event.inputs.forceRebuild == 'false' && 'type=gha,mode=max' || '' }}
